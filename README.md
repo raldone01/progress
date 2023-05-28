@@ -1,4 +1,4 @@
-# Progress - The most progressive modern inventive effective efficient productive and successful program of the 23rd century
+# Progress - The most progressive modern inventive effective efficient productive and successful program of the 21st century
 
 `python progress.py` to run
 
