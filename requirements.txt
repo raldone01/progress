@@ -1,2 +1,2 @@
-pyside2
+pyside6
 darkdetect

@@ -1,6 +1,6 @@
-from PySide2.QtWidgets import QApplication, QMainWindow, QLabel, QProgressBar, QWidget, QVBoxLayout
-from PySide2.QtCore import QTimer, Qt
-from PySide2.QtGui import QColor, QIcon
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QProgressBar, QWidget, QVBoxLayout
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QColor, QIcon
 import random
 import colorsys
 import time
@@ -242,4 +242,4 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, lambda *args: app.quit())
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
