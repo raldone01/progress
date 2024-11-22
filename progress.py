@@ -1,6 +1,14 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QProgressBar, QWidget, QVBoxLayout
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QLabel,
+    QProgressBar,
+    QWidget,
+    QVBoxLayout,
+)
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QColor, QIcon
+from PySide6 import QtSvg  # without this import, the icons won't show up
 import random
 import colorsys
 import time
@@ -10,19 +18,26 @@ import signal
 import darkdetect
 import argparse
 
+
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
+    """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
-        base_path = os.path.abspath(".")
+        base_path = os.path.dirname(os.path.realpath(__file__))
 
-    return os.path.join(base_path, relative_path)
+    result = os.path.join(base_path, relative_path)
+    assert os.path.exists(result), f"File not found: {result}"
+    return result
+
 
 # Load funny messages from a file
-with open(resource_path('messages.txt'), 'r') as f:
+with open(resource_path("messages.txt"), "r") as f:
     messages = [line.strip() for line in f.readlines()]
+    # filter out empty lines
+    messages = list(filter(None, messages))
+
 
 def random_position_on_screen(edge_buffer=300):
     """Return a random position on the screen for a window."""
@@ -31,8 +46,10 @@ def random_position_on_screen(edge_buffer=300):
     y = random.randint(edge_buffer, screen.height() - edge_buffer)
     return x, y
 
+
 def make_rainbow(speed):
     """Create a function that generates smooth rainbow colors based on time and speed."""
+
     def rainbow():
         """Return the current color in the rainbow."""
         now = time.time()
@@ -40,7 +57,21 @@ def make_rainbow(speed):
         r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
         r, g, b = int(r * 255), int(g * 255), int(b * 255)
         return QColor(r, g, b)
+
     return rainbow
+
+
+debug_windows = []
+
+
+def set_window_icon(window):
+    # set icon to infinity symbol depending on the theme
+    if darkdetect.isDark():
+        icon_path = resource_path("icon_dark.svg")
+    else:
+        icon_path = resource_path("icon_light.svg")
+    window.setWindowIcon(QIcon(icon_path))
+
 
 class MovingProgressBar(QMainWindow):
     def __init__(self, movement_speed, initial_position, initial_direction):
@@ -48,16 +79,14 @@ class MovingProgressBar(QMainWindow):
         self.setWindowTitle("Loading...")
         self.message = random.choice(messages)
 
-        # set icon to infinity symbol depending on the theme
-        if darkdetect.isDark():
-            self.setWindowIcon(QIcon(resource_path('icon_dark.svg')))
-        else:
-            self.setWindowIcon(QIcon(resource_path('icon_light.svg')))
+        set_window_icon(self)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximum(random.randint(100, 1000))
+        self.set_stylesheet(QColor(255, 255, 255))
 
         self.label = QLabel(self.message)
+        self.label.setStyleSheet("font-size: 50px;")
 
         layout = QVBoxLayout()
         layout.addWidget(self.progress_bar)
@@ -89,6 +118,21 @@ class MovingProgressBar(QMainWindow):
         self.last_corner = None
         windows.append(self)
 
+    def set_stylesheet(self, background_color):
+        """Set the stylesheet of the progress bar."""
+
+        if background_color == QColor(255, 255, 255):
+            text_color = QColor(255 // 2, 255 // 2, 255 // 2)
+        else:
+            if background_color.lightnessF() > 0.5:
+                text_color = QColor(0, 0, 0)
+            else:
+                text_color = QColor(255, 255, 255)
+
+        self.progress_bar.setStyleSheet(
+            f"QProgressBar::chunk {{ background-color: {background_color.name()}; }} QProgressBar {{ color: {text_color.name()}; }}"
+        )
+
     def destroy(self, destroyWindow: bool = ..., destroySubWindows: bool = ...):
         # stop timers
         self.timer_move_window.stop()
@@ -102,15 +146,25 @@ class MovingProgressBar(QMainWindow):
         """Return True if the window is at a corner."""
         screen = QApplication.primaryScreen().availableGeometry()
         screen_width, screen_height = screen.width(), screen.height()
-        window_width, window_height = self.frameGeometry().width(), self.frameGeometry().height()
+        window_width, window_height = (
+            self.frameGeometry().width(),
+            self.frameGeometry().height(),
+        )
         x, y = self.x(), self.y()
-        top_left = (x <= tolerance and y <= tolerance)
-        top_right = (x >= screen_width - window_width - tolerance and y <= tolerance)
-        bottom_left = (x <= tolerance and y >= screen_height - window_height - tolerance)
-        bottom_right = (x >= screen_width - window_width - tolerance and y >= screen_height - window_height - tolerance)
-        corner_index = [top_left, top_right, bottom_left, bottom_right].index(True) if any([top_left, top_right, bottom_left, bottom_right]) else None
+        top_left = x <= tolerance and y <= tolerance
+        top_right = x >= screen_width - window_width - tolerance and y <= tolerance
+        bottom_left = x <= tolerance and y >= screen_height - window_height - tolerance
+        bottom_right = (
+            x >= screen_width - window_width - tolerance
+            and y >= screen_height - window_height - tolerance
+        )
+        corner_index = (
+            [top_left, top_right, bottom_left, bottom_right].index(True)
+            if any([top_left, top_right, bottom_left, bottom_right])
+            else None
+        )
 
-        if (corner_index is not None and corner_index != self.last_corner):
+        if corner_index is not None and corner_index != self.last_corner:
             self.last_corner = corner_index
             self.corner_hit += 1
             return True
@@ -129,7 +183,7 @@ class MovingProgressBar(QMainWindow):
 
     def rainbow_func(self):
         """Set the color of the progress bar."""
-        self.progress_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {self.rainbow().name()}; }}")
+        self.set_stylesheet(self.rainbow())
         # restart the timer
         self.timer_rainbow.start(10)
 
@@ -142,8 +196,8 @@ class MovingProgressBar(QMainWindow):
                 # destroy the window
                 self.close()
             else:
-              # wait a few seconds before destroying the window
-              QTimer.singleShot(3000, self.close)
+                # wait a few seconds before destroying the window
+                QTimer.singleShot(3000, self.close)
             return
         self.progress_bar.setValue(progress + random.randint(0, 5))
         # restart the timer
@@ -152,8 +206,14 @@ class MovingProgressBar(QMainWindow):
     def move_window_func(self):
         x, y = self.x(), self.y()
         dx, dy = self.direction
-        window_width, window_height = self.frameGeometry().width(), self.frameGeometry().height()
-        screen_width, screen_height = QApplication.primaryScreen().availableGeometry().width(), QApplication.primaryScreen().availableGeometry().height()
+        window_width, window_height = (
+            self.frameGeometry().width(),
+            self.frameGeometry().height(),
+        )
+        screen_width, screen_height = (
+            QApplication.primaryScreen().availableGeometry().width(),
+            QApplication.primaryScreen().availableGeometry().height(),
+        )
 
         # update corner hit
         if self.is_at_corner():
@@ -174,7 +234,9 @@ class MovingProgressBar(QMainWindow):
 
         self.move(x, y)
 
+
 windows = []
+
 
 def create_moving_progress_bar():
     initial_position = random_position_on_screen()
@@ -190,7 +252,9 @@ def create_moving_progress_bar():
         new_win.setAttribute(Qt.WA_ShowWithoutActivating)
     new_win.show()
 
+
 app = None
+
 
 class MadnessAction(argparse.Action):
     def __init__(self, option_strings, dest, nargs=None, **kwargs):
@@ -199,18 +263,23 @@ class MadnessAction(argparse.Action):
         super(MadnessAction, self).__init__(option_strings, dest, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        if values.lower() == 'true':
+        if values.lower() == "true":
             setattr(namespace, self.dest, True)
-        elif values.lower() == 'false':
+        elif values.lower() == "false":
             setattr(namespace, self.dest, False)
         else:
             try:
                 val = int(values)
             except ValueError:
-                raise argparse.ArgumentTypeError(f"Invalid value '{values}' for --madness")
+                raise argparse.ArgumentTypeError(
+                    f"Invalid value '{values}' for --madness"
+                )
             if val < 0:
-                raise argparse.ArgumentTypeError(f"Invalid value '{values}' for --madness")
+                raise argparse.ArgumentTypeError(
+                    f"Invalid value '{values}' for --madness"
+                )
             setattr(namespace, self.dest, val)
+
 
 if __name__ == "__main__":
     # print pid
@@ -219,21 +288,32 @@ if __name__ == "__main__":
 
     # parse madness flag
     parser = argparse.ArgumentParser()
-    parser.add_argument('--madness', action=MadnessAction, help='Enable madness (integer or boolean)')
+    parser.add_argument(
+        "--madness", action=MadnessAction, help="Enable madness (integer or boolean)"
+    )
 
     args = parser.parse_args()
-    #print(args.madness)
+    # print(args.madness)
 
     new_progress_bar_interval = 2000
     if args.madness is not None:
-        if type(args.madness) == bool:
+        if args.madness is bool:
             if args.madness:
                 new_progress_bar_interval = 500
         else:
             new_progress_bar_interval = args.madness
 
+    # Fix taskbar icon on Windows
+    if os.name == "nt":
+        import ctypes
+
+        myappid = "progress.progress_py.1.0.0"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)
+
+    set_window_icon(app)
     create_moving_progress_bar()
     timer = QTimer()
     timer.timeout.connect(create_moving_progress_bar)
